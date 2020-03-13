@@ -12,8 +12,13 @@ import "github.com/truongminh/gonpm"
 import "github.com/truongminh/gonpm/storage"
 
 func main() {
-    port := 80
-    s := gonpm.NewProxy(port, storage.NewFS("/tmp/gonpm"))
+    port := 8080
+    cacheURI := "fs:///tmp?limit=256GB"
+    store, err := storage.Open(cacheURI)
+    if err != nil {
+        panic(err)
+    }
+    s := gonpm.NewProxy(port, store)
     err := s.Listen(ctx)
     if err != nil {
         panic(err)
@@ -23,6 +28,6 @@ func main() {
 
 ## Deployment
 ```sh
-make && make pushdev|pushstage|púhprod
+make && make pushdev|pushstage|pushprod
 ```
 
