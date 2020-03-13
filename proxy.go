@@ -4,13 +4,15 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
-	"gonpm/cert"
 	"io"
 	"io/ioutil"
 	"log"
 	"net"
 	"net/http"
+	"gonpm/cert"
+	"gonpm/storage"
 	"os"
+	"time"
 )
 
 // Proxy supports http and https
@@ -22,15 +24,19 @@ type Proxy interface {
 type server struct {
 	addr     string
 	unixsock string
+	c        *cache
 }
 
 // NewProxy server
-func NewProxy(port int) Proxy {
+func NewProxy(port int, driver storage.Driver) Proxy {
 	addr := fmt.Sprintf(":%d", port)
 	unixsock := fmt.Sprintf("/tmp/gonpm_%d.sock", port)
 	s := &server{
 		addr:     addr,
 		unixsock: unixsock,
+	}
+	if driver != nil {
+		s.c = &cache{driver}
 	}
 	return s
 }
@@ -52,7 +58,21 @@ func (s *server) get(w http.ResponseWriter, r *http.Request) {
 		req.Host = remote
 		req.URL.Host = remote
 	}
-	log.Printf("get %s", req.URL)
+	url := req.URL.String()
+	// log.Printf("get %s", url)
+	// get from cache
+	if s.c != nil {
+		written, err := s.c.Copy(ctx, w, url)
+		if err == nil {
+			return
+		}
+		if written > 0 {
+			// already write but got error
+			http.Error(w, "failed storage "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+	}
+	// send request to upstream
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -69,7 +89,12 @@ func (s *server) get(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	copyHeader(w.Header(), resp.Header)
-	io.Copy(w, resp.Body)
+	// put to cache
+	if s.c != nil {
+		s.c.CopyAndCache(ctx, w, resp.Body, url)
+	} else {
+		io.Copy(w, resp.Body)
+	}
 }
 
 func (s *server) connect(w http.ResponseWriter, r *http.Request) {
@@ -107,9 +132,11 @@ func (s *server) connect(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	// log.Printf("request %s", r.URL)
 	if r.Method == http.MethodGet {
+		start := time.Now()
 		s.get(w, r)
+		ellapsed := time.Now().Sub(start)
+		log.Printf("[http] url %s in %d us", r.URL, ellapsed.Microseconds())
 	} else if r.Method == http.MethodConnect {
 		// https here
 		s.connect(w, r)

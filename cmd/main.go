@@ -2,10 +2,12 @@ package main
 
 import (
 	"context"
-	"gonpm"
 	"log"
+	"gonpm"
+	"gonpm/storage"
 	"os"
 	"os/signal"
+	"strconv"
 )
 
 func main() {
@@ -27,9 +29,21 @@ func main() {
 		}()
 	}
 	{
-		port := 8999
-		s := gonpm.NewProxy(port)
-		err := s.Listen(ctx)
+		port, _ := strconv.Atoi(os.Getenv("PORT"))
+		if port < 1 {
+			port = 8080
+		}
+		cacheURI := os.Getenv("NPM_CACHE")
+		if cacheURI == "" {
+			cacheURI = "fs://../data?limit=4GB"
+		}
+		log.Printf("[storage] %s", cacheURI)
+		store, err := storage.Open(cacheURI)
+		if err != nil {
+			log.Fatal(err)
+		}
+		s := gonpm.NewProxy(port, store)
+		err = s.Listen(ctx)
 		if err != nil {
 			log.Fatal(err)
 		}
