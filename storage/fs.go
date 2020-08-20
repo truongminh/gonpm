@@ -85,7 +85,7 @@ type fswriter struct {
 }
 
 func newWriter(folder string, filename string) (w *fswriter, err error) {
-	f, err := ioutil.TempFile(os.TempDir(), "gonpm-fs-")
+	f, err := ioutil.TempFile(os.TempDir(), "npmcp-fs-")
 	if err != nil {
 		return
 	}
