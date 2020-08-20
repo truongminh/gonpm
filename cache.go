@@ -1,4 +1,4 @@
-package gonpm
+package npmcp
 
 import (
 	"context"
@@ -8,7 +8,7 @@ import (
 	"fmt"
 	"io"
 	"log"
-	"gonpm/storage"
+	"npmcp/storage"
 	"time"
 )
 
